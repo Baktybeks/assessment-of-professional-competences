@@ -1,8 +1,9 @@
 // components/admin/TestForm.tsx
-import React, { useState, useEffect } from "react";
-import { useTests } from "../../lib/hooks/useTests";
-import { useCategories } from "../../lib/hooks/useCategories";
-import { Test, Category } from "../../lib/types";
+import React, { useState } from "react";
+import { useCreateTest, useUpdateTest } from "@/services/testService"; // Новый импорт
+import { useCategories } from "@/services/categoryService";
+import { Test } from "../../lib/types";
+import { useAuth } from "@/context/AuthProvider"; // Добавлен импорт для получения ID пользователя
 
 interface TestFormProps {
   initialTest?: Test;
@@ -16,20 +17,20 @@ const TestForm: React.FC<TestFormProps> = ({ initialTest, onSuccess }) => {
   );
   const [categoryId, setCategoryId] = useState(initialTest?.categoryId || "");
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { createTest, updateTest } = useTests();
-  const {
-    categories,
-    fetchCategories,
-    loading: categoriesLoading,
-  } = useCategories();
+  const { user } = useAuth(); // Получаем данные пользователя
+
+  // Используем мутации из testService
+  const createTestMutation = useCreateTest();
+  const updateTestMutation = useUpdateTest();
+  const isSubmitting =
+    createTestMutation.isPending || updateTestMutation.isPending;
+
+  // Используем хук категорий из categoryService
+  const { data: categories = [], isLoading: categoriesLoading } =
+    useCategories();
 
   const isEditing = !!initialTest;
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,26 +46,42 @@ const TestForm: React.FC<TestFormProps> = ({ initialTest, onSuccess }) => {
       return;
     }
 
-    setIsSubmitting(true);
+    if (!user) {
+      setError("Необходимо авторизоваться");
+      return;
+    }
 
     try {
       if (isEditing && initialTest.$id) {
-        await updateTest(initialTest.$id, name, description, categoryId);
+        // Используем мутацию обновления теста
+        await updateTestMutation.mutateAsync({
+          id: initialTest.$id,
+          name,
+          description,
+          categoryId,
+        });
       } else {
-        await createTest(name, description, categoryId);
+        // Используем мутацию создания теста
+        await createTestMutation.mutateAsync({
+          name,
+          description,
+          categoryId,
+          userId: user.$id as string,
+        });
       }
 
-      setName("");
-      setDescription("");
-      setCategoryId("");
+      // Сброс формы (только при создании нового теста)
+      if (!isEditing) {
+        setName("");
+        setDescription("");
+        setCategoryId("");
+      }
 
       if (onSuccess) {
         onSuccess();
       }
     } catch (err: any) {
       setError(err.message || "Произошла ошибка");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

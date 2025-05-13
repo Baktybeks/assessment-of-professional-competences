@@ -1,6 +1,6 @@
 // components/admin/QuestionForm.tsx
 import React, { useState } from "react";
-import { useTests } from "../../lib/hooks/useTests";
+import { useCreateQuestion, useUpdateQuestion } from "@/services/testService"; // Новый импорт
 import { Question } from "../../lib/types";
 
 interface QuestionFormProps {
@@ -22,11 +22,14 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
     initialQuestion?.correctOptionIndex || 0
   );
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { createQuestion, updateQuestion } = useTests();
+  // Используем мутации из testService
+  const createQuestionMutation = useCreateQuestion();
+  const updateQuestionMutation = useUpdateQuestion();
 
   const isEditing = !!initialQuestion;
+  const isSubmitting =
+    createQuestionMutation.isPending || updateQuestionMutation.isPending;
 
   const handleOptionChange = (index: number, value: string) => {
     const newOptions = [...options];
@@ -49,18 +52,24 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
       return;
     }
 
-    setIsSubmitting(true);
-
     try {
       if (isEditing && initialQuestion.$id) {
-        await updateQuestion(
-          initialQuestion.$id,
+        // Используем мутацию обновления вопроса
+        await updateQuestionMutation.mutateAsync({
+          id: initialQuestion.$id,
           text,
           options,
-          correctOptionIndex
-        );
+          correctOptionIndex,
+          testId, // передаем testId для обновления кеша в React Query
+        });
       } else {
-        await createQuestion(testId, text, options, correctOptionIndex);
+        // Используем мутацию создания вопроса
+        await createQuestionMutation.mutateAsync({
+          testId,
+          text,
+          options,
+          correctOptionIndex,
+        });
       }
 
       // Сброс формы
@@ -73,8 +82,6 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
       }
     } catch (err: any) {
       setError(err.message || "Произошла ошибка");
-    } finally {
-      setIsSubmitting(false);
     }
   };
 

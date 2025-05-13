@@ -9,6 +9,7 @@ client
   .setEndpoint(appwriteConfig.endpoint) // Замените на свой эндпоинт Appwrite
   .setProject(appwriteConfig.projectId); // Замените на ID вашего проекта в Appwrite
 
+export { client };
 // Экспорт сервисов Appwrite
 export const account = new Account(client);
 export const databases = new Databases(client);

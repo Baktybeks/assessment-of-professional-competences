@@ -1,9 +1,13 @@
 // pages/admin/tests.tsx
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { useTests } from "../../lib/hooks/useTests";
-import { useCategories } from "../../lib/hooks/useCategories";
-import { UserRole, Test, Category } from "../../lib/types";
+import {
+  useTests,
+  useDeleteTest,
+  useTestQuestions,
+} from "@/services/testService"; // Обновленный импорт
+import { useCategories } from "@/services/categoryService";
+import { UserRole, Test, Question } from "../../lib/types";
 import Layout from "../../components/common/Layout";
 import TestForm from "../../components/admin/TestForm";
 import QuestionForm from "../../components/admin/QuestionForm";
@@ -15,16 +19,22 @@ import { useAuth } from "@/context/AuthProvider";
 const TestsPage: React.FC = () => {
   const router = useRouter();
   const { user, loading } = useAuth();
+
+  // Используем React Query хуки для тестов
   const {
-    tests,
-    fetchTests,
-    deleteTest,
-    fetchTestQuestions,
-    questions,
-    loading: testsLoading,
-    error,
+    data: tests = [], // Вместо tests
+    isLoading: testsLoading, // Вместо loading: testsLoading
+    isError: isTestsError,
+    error: testsError,
+    refetch: fetchTests, // Для совместимости
   } = useTests();
-  const { categories, fetchCategories } = useCategories();
+
+  // Хук для удаления теста
+  const deleteTestMutation = useDeleteTest();
+
+  // Используем хук категорий (уже обновлен)
+  const { data: categories = [], isLoading: categoriesLoading } =
+    useCategories();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -33,7 +43,14 @@ const TestsPage: React.FC = () => {
   const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
   const [selectedTest, setSelectedTest] = useState<Test | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [loadingQuestions, setLoadingQuestions] = useState(false);
+  const [selectedTestId, setSelectedTestId] = useState<string>("");
+
+  // Хук для получения вопросов теста
+  const {
+    data: questions = [],
+    isLoading: questionsLoading,
+    refetch: fetchTestQuestions,
+  } = useTestQuestions(selectedTestId);
 
   useEffect(() => {
     // Проверяем, что пользователь авторизован и имеет роль администратора
@@ -44,10 +61,16 @@ const TestsPage: React.FC = () => {
 
   useEffect(() => {
     if (user && user.role === UserRole.ADMIN) {
-      fetchTests();
-      fetchCategories();
+      fetchTests(); // Можно оставить для обновления данных при монтировании
     }
-  }, [user]);
+  }, [user, fetchTests]);
+
+  // Обновляем selectedTestId при изменении selectedTest
+  useEffect(() => {
+    if (selectedTest && selectedTest.$id) {
+      setSelectedTestId(selectedTest.$id);
+    }
+  }, [selectedTest]);
 
   const handleCreateTest = () => {
     setIsCreateModalOpen(true);
@@ -68,7 +91,8 @@ const TestsPage: React.FC = () => {
 
     try {
       setIsDeleting(true);
-      await deleteTest(selectedTest.$id);
+      // Используем мутацию удаления теста
+      await deleteTestMutation.mutateAsync(selectedTest.$id);
       setIsDeleteModalOpen(false);
     } catch (error) {
       console.error("Ошибка удаления теста:", error);
@@ -79,14 +103,12 @@ const TestsPage: React.FC = () => {
 
   const handleViewQuestions = async (test: Test) => {
     setSelectedTest(test);
-    setLoadingQuestions(true);
+    // Обновление selectedTestId запустит загрузку вопросов через хук useTestQuestions
     try {
-      await fetchTestQuestions(test.$id!);
+      await fetchTestQuestions(); // Обновит вопросы
       setIsQuestionsModalOpen(true);
     } catch (error) {
       console.error("Ошибка загрузки вопросов:", error);
-    } finally {
-      setLoadingQuestions(false);
     }
   };
 
@@ -128,12 +150,14 @@ const TestsPage: React.FC = () => {
           </Button>
         </div>
 
-        {error && (
+        {isTestsError && (
           <div
             className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
             role="alert"
           >
-            <span className="block sm:inline">{error}</span>
+            <span className="block sm:inline">
+              {testsError?.message || "Произошла ошибка при загрузке тестов"}
+            </span>
           </div>
         )}
 
@@ -205,7 +229,7 @@ const TestsPage: React.FC = () => {
                           size="sm"
                           onClick={() => handleViewQuestions(test)}
                           isLoading={
-                            loadingQuestions && selectedTest?.$id === test.$id
+                            questionsLoading && selectedTest?.$id === test.$id
                           }
                         >
                           Вопросы
@@ -243,7 +267,7 @@ const TestsPage: React.FC = () => {
         <TestForm
           onSuccess={() => {
             setIsCreateModalOpen(false);
-            fetchTests();
+            fetchTests(); // React Query автоматически обновит данные, но можно вызвать для уверенности
           }}
         />
       </Modal>
@@ -259,7 +283,7 @@ const TestsPage: React.FC = () => {
             initialTest={selectedTest}
             onSuccess={() => {
               setIsEditModalOpen(false);
-              fetchTests();
+              fetchTests(); // React Query автоматически обновит данные, но можно вызвать для уверенности
             }}
           />
         )}
@@ -375,7 +399,7 @@ const TestsPage: React.FC = () => {
             testId={selectedTest.$id!}
             onSuccess={() => {
               setIsAddQuestionModalOpen(false);
-              fetchTestQuestions(selectedTest.$id!);
+              fetchTestQuestions(); // Вызываем рефетч для получения обновленных вопросов
               setIsQuestionsModalOpen(true);
             }}
           />

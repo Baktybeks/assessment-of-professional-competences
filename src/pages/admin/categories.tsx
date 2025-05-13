@@ -1,7 +1,11 @@
 // pages/admin/categories.tsx
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
-import { useCategories } from "../../lib/hooks/useCategories";
+import {
+  useCategories,
+  useDeleteCategory,
+  useCategory,
+} from "@/services/categoryService"; // Обновлённый импорт
 import { UserRole, Category } from "../../lib/types";
 import Layout from "../../components/common/Layout";
 import CategoryForm from "../../components/admin/CategoryForm";
@@ -12,13 +16,18 @@ import { useAuth } from "@/context/AuthProvider";
 const CategoriesPage: React.FC = () => {
   const router = useRouter();
   const { user, loading } = useAuth();
+
+  // Используем новые хуки из categoryService
   const {
-    categories,
-    fetchCategories,
-    deleteCategory,
-    loading: categoriesLoading,
+    data: categories = [], // Изменено с categories на data с дефолтным значением
+    isLoading: categoriesLoading, // Изменено с loading на isLoading
+    isError,
     error,
+    refetch: fetchCategories, // Переименовываем для поддержания совместимости
   } = useCategories();
+
+  // Хук для удаления категории
+  const deleteCategoryMutation = useDeleteCategory();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -35,11 +44,13 @@ const CategoriesPage: React.FC = () => {
     }
   }, [user, loading, router]);
 
+  // React Query автоматически загружает категории при монтировании, но можно оставить
+  // этот useEffect для контроля авторизации перед загрузкой
   useEffect(() => {
     if (user && user.role === UserRole.ADMIN) {
-      fetchCategories();
+      fetchCategories(); // Теперь это вызов refetch() из React Query
     }
-  }, [user]);
+  }, [user, fetchCategories]);
 
   const handleCreateCategory = () => {
     setIsCreateModalOpen(true);
@@ -60,7 +71,8 @@ const CategoriesPage: React.FC = () => {
 
     try {
       setIsDeleting(true);
-      await deleteCategory(selectedCategory.$id);
+      // Используем мутацию удаления из React Query
+      await deleteCategoryMutation.mutateAsync(selectedCategory.$id);
       setIsDeleteModalOpen(false);
     } catch (error) {
       console.error("Ошибка удаления категории:", error);
@@ -97,12 +109,12 @@ const CategoriesPage: React.FC = () => {
           </Button>
         </div>
 
-        {error && (
+        {isError && (
           <div
             className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
             role="alert"
           >
-            <span className="block sm:inline">{error}</span>
+            <span className="block sm:inline">{error?.message}</span>
           </div>
         )}
 
@@ -194,6 +206,8 @@ const CategoriesPage: React.FC = () => {
         <CategoryForm
           onSuccess={() => {
             setIsCreateModalOpen(false);
+            // React Query автоматически обновит данные после мутации,
+            // но можно явно вызвать refetch для обновления
             fetchCategories();
           }}
         />
@@ -210,6 +224,8 @@ const CategoriesPage: React.FC = () => {
             initialCategory={selectedCategory}
             onSuccess={() => {
               setIsEditModalOpen(false);
+              // React Query автоматически обновит данные после мутации,
+              // но можно явно вызвать refetch для обновления
               fetchCategories();
             }}
           />

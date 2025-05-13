@@ -18,25 +18,27 @@ const RegisterForm: React.FC = () => {
 
   const { register, loading, error } = useAuth();
 
-  useEffect(() => {
-    const checkAdmins = async () => {
-      try {
-        setIsLoading(true);
-        const result = await databases.listDocuments(
-          DATABASES.MAIN_DB,
-          COLLECTIONS.USERS,
-          [Query.equal("role", UserRole.ADMIN)]
-        );
-        setHasAdmin(result.total > 0);
-      } catch (err) {
-        console.error("Ошибка при проверке наличия администраторов:", err);
-        // Если не удалось проверить, предполагаем, что админов нет
-        setHasAdmin(false);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Функция проверки наличия администраторов
+  const checkAdmins = async () => {
+    try {
+      setIsLoading(true);
+      const result = await databases.listDocuments(
+        DATABASES.MAIN_DB,
+        COLLECTIONS.USERS,
+        [Query.equal("role", UserRole.ADMIN)]
+      );
+      console.log("Найдено администраторов:", result.total);
+      setHasAdmin(result.total > 0);
+    } catch (err) {
+      console.error("Ошибка при проверке наличия администраторов:", err);
+      // Если не удалось проверить, предполагаем, что админов нет
+      setHasAdmin(false);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     checkAdmins();
   }, []);
 
@@ -56,9 +58,22 @@ const RegisterForm: React.FC = () => {
       setValidationError("Пароль должен содержать не менее 8 символов");
       return;
     }
+
+    // Определяем роль: если админов нет, то новый пользователь - админ, иначе выбранная роль
     const userRole = hasAdmin ? role : UserRole.ADMIN;
 
-    await register(name, email, password, userRole);
+    try {
+      // Регистрация пользователя
+      await register(name, email, password, userRole);
+
+      // После успешной регистрации проверяем админов снова
+      // чтобы обновить состояние для следующих пользователей
+      if (!hasAdmin) {
+        await checkAdmins();
+      }
+    } catch (error) {
+      console.error("Ошибка при регистрации:", error);
+    }
   };
 
   return (
@@ -171,26 +186,6 @@ const RegisterForm: React.FC = () => {
                 onChange={(e) => setConfirmPassword(e.target.value)}
               />
             </div>
-            {hasAdmin && (
-              <div>
-                <label
-                  htmlFor="role"
-                  className="block text-gray-700 text-sm font-bold mb-2"
-                >
-                  Роль
-                </label>
-                <select
-                  id="role"
-                  name="role"
-                  className="appearance-none rounded relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as UserRole)}
-                >
-                  <option value={UserRole.TEACHER}>Преподаватель</option>
-                  <option value={UserRole.ADMIN}>Администратор</option>
-                </select>
-              </div>
-            )}
           </div>
           <div>
             <button

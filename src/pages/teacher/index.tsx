@@ -3,15 +3,20 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { UserRole } from "../../lib/types";
 import Layout from "../../components/common/Layout";
-import { useTests } from "../../lib/hooks/useTests";
+import { useUserTestResults } from "@/services/testService"; // Обновленный импорт
 import Button from "../../components/common/Button";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthProvider";
+import { formatScore } from "@/utils/formatters";
 
 const TeacherDashboard: React.FC = () => {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const { fetchUserTestResults, results, loading: resultsLoading } = useTests();
+
+  // Используем хук для получения результатов тестов пользователя
+  const { data: results = [], isLoading: resultsLoading } = useUserTestResults(
+    user?.$id || ""
+  );
 
   const [recentResults, setRecentResults] = useState<any[]>([]);
   const [stats, setStats] = useState({
@@ -27,18 +32,8 @@ const TeacherDashboard: React.FC = () => {
     }
   }, [user, loading, router]);
 
-  // Загрузка результатов тестов пользователя
-  useEffect(() => {
-    const loadResults = async () => {
-      if (user && user.$id) {
-        await fetchUserTestResults(user.$id);
-      }
-    };
-
-    if (user && user.role === UserRole.TEACHER) {
-      loadResults();
-    }
-  }, [user]);
+  // Нам больше не нужен useEffect для загрузки результатов,
+  // т.к. React Query загружает данные автоматически
 
   // Обработка результатов
   useEffect(() => {
@@ -260,7 +255,9 @@ const TeacherDashboard: React.FC = () => {
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold">{result.score}%</p>
+                      <p className="text-lg font-bold">
+                        {formatScore(result.score)}%
+                      </p>
                       <p
                         className={`text-sm ${
                           result.score >= 60 ? "text-green-500" : "text-red-500"

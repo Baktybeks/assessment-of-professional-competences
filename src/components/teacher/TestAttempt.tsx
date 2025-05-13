@@ -8,6 +8,7 @@ import {
 } from "@/services/testService";
 import { SubmitAnswerPayload, TestAttemptResult } from "@/lib/types";
 import { useAuth } from "@/context/AuthProvider";
+import { formatScore } from "@/utils/formatters";
 
 const TestAttempt: React.FC<{ testId: string }> = ({ testId }) => {
   const router = useRouter();
@@ -140,7 +141,7 @@ const TestAttempt: React.FC<{ testId: string }> = ({ testId }) => {
               {testResult.totalQuestions}
             </p>
             <p className="text-lg font-bold">
-              Ваш результат: {testResult.score}%
+              <p>Ваш результат: {formatScore(testResult.score)}%</p>
             </p>
             <p className="text-sm mt-2 text-gray-600">
               Для успешного прохождения теста необходимо набрать не менее 60%

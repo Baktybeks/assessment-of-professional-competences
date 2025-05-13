@@ -3,6 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useUserTestResults, useTests } from "@/services/testService";
 import { useCategories } from "@/services/categoryService";
 import { useAuth } from "@/context/AuthProvider";
+import { formatScore } from "@/utils/formatters";
 
 interface EnrichedTestResult {
   $id?: string;
@@ -133,7 +134,7 @@ const TestResults: React.FC = () => {
                     {result.categoryName}
                   </td>
                   <td className="py-2 px-4 border-b border-gray-200">
-                    {result.score}%
+                    {formatScore(result.score)}%
                   </td>
                   <td className="py-2 px-4 border-b border-gray-200">
                     <span

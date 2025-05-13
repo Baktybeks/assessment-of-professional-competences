@@ -1,30 +1,35 @@
 // components/teacher/TestList.tsx
 import React, { useEffect, useState } from "react";
-import { useTests } from "../../lib/hooks/useTests";
-import { useCategories } from "../../lib/hooks/useCategories";
-import { Test, Category } from "../../lib/types";
+import { useTests } from "@/services/testService"; // Обновленный импорт
+import { useCategories } from "@/services/categoryService";
+import { Test } from "../../lib/types";
 import Link from "next/link";
 
 const TestList: React.FC = () => {
+  // Используем новый хук useTests из testService
   const {
-    tests,
-    fetchTests,
-    loading: testsLoading,
+    data: tests = [], // Изменено с tests на data: tests
+    isLoading: testsLoading, // Изменено с loading на isLoading
+    isError: isTestsError, // Изменено с error на isError
     error: testsError,
+    // Здесь fetchTests больше не нужен, так как React Query загружает данные автоматически
   } = useTests();
+
+  // Используем хук useCategories из categoryService (уже обновлен)
   const {
-    categories,
-    fetchCategories,
-    loading: categoriesLoading,
+    data: categories = [],
+    isLoading: categoriesLoading,
+    isError: isCategoriesError,
+    error: categoriesError,
   } = useCategories();
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [filteredTests, setFilteredTests] = useState<Test[]>([]);
 
-  useEffect(() => {
-    fetchTests();
-    fetchCategories();
-  }, []);
+  // Удаляем вызов fetchTests - React Query автоматически загружает данные
+  // useEffect(() => {
+  //   fetchTests();
+  // }, []);
 
   // Фильтрация тестов при изменении выбранной категории или списка тестов
   useEffect(() => {
@@ -46,13 +51,17 @@ const TestList: React.FC = () => {
     return <div className="p-4">Загрузка тестов...</div>;
   }
 
-  if (testsError) {
+  if (isTestsError || isCategoriesError) {
     return (
       <div
         className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4"
         role="alert"
       >
-        <span className="block sm:inline">{testsError}</span>
+        <span className="block sm:inline">
+          {testsError?.message ||
+            categoriesError?.message ||
+            "Произошла ошибка при загрузке данных"}
+        </span>
       </div>
     );
   }

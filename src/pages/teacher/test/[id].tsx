@@ -4,15 +4,19 @@ import { useRouter } from "next/router";
 import { UserRole } from "../../../lib/types";
 import Layout from "../../../components/common/Layout";
 import TestAttempt from "../../../components/teacher/TestAttempt";
-import { useTests } from "../../../lib/hooks/useTests";
+import { useTest } from "@/services/testService"; // Обновленный импорт
 import { useAuth } from "@/context/AuthProvider";
 
 const TestPage: React.FC = () => {
   const router = useRouter();
   const { id } = router.query;
   const { user, loading } = useAuth();
-  const { tests, fetchTests } = useTests();
-  const [testName, setTestName] = useState<string>("");
+
+  // Используем хук для получения одного теста вместо всех тестов
+  const { data: test, isLoading: testLoading } = useTest((id as string) || "");
+
+  // Нам больше не нужно хранить название теста в отдельном состоянии,
+  // так как мы можем получить его напрямую из test.name
 
   useEffect(() => {
     // Проверяем, что пользователь авторизован и имеет роль преподавателя
@@ -21,28 +25,10 @@ const TestPage: React.FC = () => {
     }
   }, [user, loading, router]);
 
-  // Загрузка данных о тесте
-  useEffect(() => {
-    const loadTest = async () => {
-      await fetchTests();
-    };
+  // Нам больше не нужен useEffect для загрузки данных,
+  // React Query автоматически загружает данные
 
-    if (user && user.role === UserRole.TEACHER) {
-      loadTest();
-    }
-  }, [user]);
-
-  // Обновление заголовка теста
-  useEffect(() => {
-    if (id && tests.length > 0) {
-      const test = tests.find((t) => t.$id === id);
-      if (test) {
-        setTestName(test.name);
-      }
-    }
-  }, [id, tests]);
-
-  if (loading || !user) {
+  if (loading || !user || testLoading) {
     return (
       <Layout title="Загрузка...">
         <div className="min-h-screen flex items-center justify-center">
@@ -78,11 +64,36 @@ const TestPage: React.FC = () => {
     );
   }
 
+  // Если тест не найден
+  if (!test) {
+    return (
+      <Layout title="Тест не найден">
+        <div className="container mx-auto px-4 py-8">
+          <div
+            className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mb-4"
+            role="alert"
+          >
+            <strong className="font-bold">Внимание! </strong>
+            <span className="block sm:inline">
+              Тест с указанным идентификатором не найден.
+            </span>
+          </div>
+          <button
+            className="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded"
+            onClick={() => router.push("/teacher/tests")}
+          >
+            Вернуться к списку тестов
+          </button>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
-    <Layout title={testName ? `Тест: ${testName}` : "Прохождение теста"}>
+    <Layout title={test.name ? `Тест: ${test.name}` : "Прохождение теста"}>
       <div className="container mx-auto px-4 py-8">
         <h1 className="text-3xl font-bold mb-8">
-          {testName || "Прохождение теста"}
+          {test.name || "Прохождение теста"}
         </h1>
 
         <TestAttempt testId={id as string} />
