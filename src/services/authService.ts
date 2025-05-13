@@ -131,8 +131,6 @@ export const authApi = {
       throw error;
     }
   },
-
-  // Вход в систему
   // Вход в систему
   login: async (email: string, password: string): Promise<User> => {
     try {
