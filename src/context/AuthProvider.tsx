@@ -105,6 +105,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   ) => {
     try {
       setError(null);
+      // Роль уже определена в форме регистрации в зависимости от наличия админа
       await registerMutation.mutateAsync({ name, email, password, role });
 
       if (role === UserRole.TEACHER) {

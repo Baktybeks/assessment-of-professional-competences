@@ -84,12 +84,22 @@ export const authApi = {
     name: string,
     email: string,
     password: string,
-    role: UserRole
+    role?: UserRole
   ): Promise<User> => {
     try {
       console.log(`Регистрация пользователя: ${email}...`);
 
-      // Создаем пользователя в Appwrite
+      const adminCheck = await database.listDocuments(
+        DATABASE_ID,
+        collections.users,
+        [Query.equal("role", UserRole.ADMIN)]
+      );
+
+      const userRole =
+        adminCheck.total === 0 ? UserRole.ADMIN : UserRole.TEACHER;
+
+      const finalRole = role || userRole;
+
       const response = await account.create(ID.unique(), email, password, name);
 
       // Создаем документ пользователя в базе данных
@@ -97,8 +107,8 @@ export const authApi = {
         userId: response.$id,
         email,
         name,
-        role,
-        isActive: role === UserRole.ADMIN ? true : false, // Администраторы активированы автоматически
+        role: finalRole,
+        isActive: finalRole === UserRole.ADMIN ? true : false, // Админы активированы автоматически
         createdAt: new Date().toISOString(),
       };
 
@@ -110,7 +120,11 @@ export const authApi = {
       );
 
       console.log("Пользователь успешно зарегистрирован:", user.$id);
-
+      if (finalRole === UserRole.ADMIN) {
+        console.log(
+          "Пользователь назначен администратором (первый пользователь в системе)"
+        );
+      }
       return user as unknown as User;
     } catch (error) {
       console.error("Ошибка при регистрации пользователя:", error);

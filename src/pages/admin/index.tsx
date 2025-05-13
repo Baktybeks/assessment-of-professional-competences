@@ -1,61 +1,30 @@
 // pages/admin/index.tsx
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { useRouter } from "next/router";
 import { UserRole } from "../../lib/types";
 import Layout from "../../components/common/Layout";
-import { useUsers } from "../../lib/hooks/useUsers";
-import { useTests } from "../../lib/hooks/useTests";
-import { useCategories } from "../../lib/hooks/useCategories";
 import { useAuth } from "@/context/AuthProvider";
+// Импортируем хуки из сервисов вместо старых хуков
+import { useTeachers, usePendingUsers } from "@/services/authService";
+import { useTests } from "@/services/testService";
+import { useCategories } from "@/services/categoryService";
 
 const AdminDashboard: React.FC = () => {
   const router = useRouter();
   const { user, loading } = useAuth();
-  const { fetchUsers, users } = useUsers();
-  const { fetchTests, tests } = useTests();
-  const { fetchCategories, categories } = useCategories();
 
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [teacherCount, setTeacherCount] = useState(0);
-  const [pendingTeacherCount, setPendingTeacherCount] = useState(0);
-  const [testCount, setTestCount] = useState(0);
-  const [categoryCount, setCategoryCount] = useState(0);
+  // Используем React Query хуки для получения данных
+  const { data: teachers = [] } = useTeachers();
+  const { data: pendingTeachers = [] } = usePendingUsers();
+  const { data: tests = [] } = useTests();
+  const { data: categories = [] } = useCategories();
 
+  // Проверка прав доступа
   useEffect(() => {
-    // Проверяем, что пользователь авторизован и имеет роль администратора
     if (!loading && (!user || user.role !== UserRole.ADMIN)) {
       router.push("/login");
     }
   }, [user, loading, router]);
-
-  // Загрузка статистики
-  useEffect(() => {
-    const loadStats = async () => {
-      try {
-        setStatsLoading(true);
-
-        // Загружаем данные параллельно
-        await Promise.all([fetchUsers(), fetchTests(), fetchCategories()]);
-
-        // Подсчитываем статистику
-        const teachers = users.filter((u) => u.role === UserRole.TEACHER);
-        const pendingTeachers = teachers.filter((t) => !t.isActive);
-
-        setTeacherCount(teachers.length);
-        setPendingTeacherCount(pendingTeachers.length);
-        setTestCount(tests.length);
-        setCategoryCount(categories.length);
-      } catch (error) {
-        console.error("Ошибка загрузки статистики:", error);
-      } finally {
-        setStatsLoading(false);
-      }
-    };
-
-    if (user && user.role === UserRole.ADMIN) {
-      loadStats();
-    }
-  }, [user]);
 
   if (loading || !user) {
     return (
@@ -74,6 +43,12 @@ const AdminDashboard: React.FC = () => {
   if (user.role !== UserRole.ADMIN) {
     return null;
   }
+
+  // Вычисляем счетчики напрямую из полученных данных
+  const teacherCount = teachers.length;
+  const pendingTeacherCount = pendingTeachers.length;
+  const testCount = tests.length;
+  const categoryCount = categories.length;
 
   return (
     <Layout title="Панель администратора">
@@ -102,13 +77,7 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-gray-500 text-sm">Всего преподавателей</p>
-                <p className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <span className="text-gray-300">...</span>
-                  ) : (
-                    teacherCount
-                  )}
-                </p>
+                <p className="text-2xl font-bold">{teacherCount}</p>
               </div>
             </div>
           </div>
@@ -133,13 +102,7 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-gray-500 text-sm">Ожидают активации</p>
-                <p className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <span className="text-gray-300">...</span>
-                  ) : (
-                    pendingTeacherCount
-                  )}
-                </p>
+                <p className="text-2xl font-bold">{pendingTeacherCount}</p>
               </div>
             </div>
           </div>
@@ -164,13 +127,7 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-gray-500 text-sm">Тесты</p>
-                <p className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <span className="text-gray-300">...</span>
-                  ) : (
-                    testCount
-                  )}
-                </p>
+                <p className="text-2xl font-bold">{testCount}</p>
               </div>
             </div>
           </div>
@@ -195,13 +152,7 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div>
                 <p className="text-gray-500 text-sm">Категории</p>
-                <p className="text-2xl font-bold">
-                  {statsLoading ? (
-                    <span className="text-gray-300">...</span>
-                  ) : (
-                    categoryCount
-                  )}
-                </p>
+                <p className="text-2xl font-bold">{categoryCount}</p>
               </div>
             </div>
           </div>
