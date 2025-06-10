@@ -1,10 +1,11 @@
-// pages/admin/tests.tsx
+// pages/admin/tests.tsx (обновленная версия с редактированием вопросов)
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import {
   useTests,
   useDeleteTest,
   useTestQuestions,
+  useDeleteQuestion,
 } from "@/services/testService"; // Обновленный импорт
 import { useCategories } from "@/services/categoryService";
 import { UserRole, Test, Question } from "../../lib/types";
@@ -22,28 +23,41 @@ const TestsPage: React.FC = () => {
 
   // Используем React Query хуки для тестов
   const {
-    data: tests = [], // Вместо tests
-    isLoading: testsLoading, // Вместо loading: testsLoading
+    data: tests = [],
+    isLoading: testsLoading,
     isError: isTestsError,
     error: testsError,
-    refetch: fetchTests, // Для совместимости
+    refetch: fetchTests,
   } = useTests();
 
-  // Хук для удаления теста
+  // Хуки для удаления
   const deleteTestMutation = useDeleteTest();
+  const deleteQuestionMutation = useDeleteQuestion();
 
   // Используем хук категорий (уже обновлен)
   const { data: categories = [], isLoading: categoriesLoading } =
     useCategories();
 
+  // Состояния модальных окон
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isQuestionsModalOpen, setIsQuestionsModalOpen] = useState(false);
   const [isAddQuestionModalOpen, setIsAddQuestionModalOpen] = useState(false);
+  const [isEditQuestionModalOpen, setIsEditQuestionModalOpen] = useState(false);
+  const [isDeleteQuestionModalOpen, setIsDeleteQuestionModalOpen] =
+    useState(false);
+
+  // Состояния для выбранных объектов
   const [selectedTest, setSelectedTest] = useState<Test | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedQuestion, setSelectedQuestion] = useState<Question | null>(
+    null
+  );
   const [selectedTestId, setSelectedTestId] = useState<string>("");
+
+  // Состояния загрузки
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isDeletingQuestion, setIsDeletingQuestion] = useState(false);
 
   // Хук для получения вопросов теста
   const {
@@ -61,7 +75,7 @@ const TestsPage: React.FC = () => {
 
   useEffect(() => {
     if (user && user.role === UserRole.ADMIN) {
-      fetchTests(); // Можно оставить для обновления данных при монтировании
+      fetchTests();
     }
   }, [user, fetchTests]);
 
@@ -72,6 +86,7 @@ const TestsPage: React.FC = () => {
     }
   }, [selectedTest]);
 
+  // Обработчики для тестов
   const handleCreateTest = () => {
     setIsCreateModalOpen(true);
   };
@@ -91,7 +106,6 @@ const TestsPage: React.FC = () => {
 
     try {
       setIsDeleting(true);
-      // Используем мутацию удаления теста
       await deleteTestMutation.mutateAsync(selectedTest.$id);
       setIsDeleteModalOpen(false);
     } catch (error) {
@@ -101,11 +115,11 @@ const TestsPage: React.FC = () => {
     }
   };
 
+  // Обработчики для вопросов
   const handleViewQuestions = async (test: Test) => {
     setSelectedTest(test);
-    // Обновление selectedTestId запустит загрузку вопросов через хук useTestQuestions
     try {
-      await fetchTestQuestions(); // Обновит вопросы
+      await fetchTestQuestions();
       setIsQuestionsModalOpen(true);
     } catch (error) {
       console.error("Ошибка загрузки вопросов:", error);
@@ -115,6 +129,38 @@ const TestsPage: React.FC = () => {
   const handleAddQuestion = () => {
     setIsQuestionsModalOpen(false);
     setIsAddQuestionModalOpen(true);
+  };
+
+  const handleEditQuestion = (question: Question) => {
+    setSelectedQuestion(question);
+    setIsQuestionsModalOpen(false);
+    setIsEditQuestionModalOpen(true);
+  };
+
+  const handleDeleteQuestion = (question: Question) => {
+    setSelectedQuestion(question);
+    setIsDeleteQuestionModalOpen(true);
+  };
+
+  const confirmDeleteQuestion = async () => {
+    if (!selectedQuestion || !selectedQuestion.$id || !selectedTest?.$id)
+      return;
+
+    try {
+      setIsDeletingQuestion(true);
+      await deleteQuestionMutation.mutateAsync({
+        id: selectedQuestion.$id,
+        testId: selectedTest.$id,
+      });
+      setIsDeleteQuestionModalOpen(false);
+      setSelectedQuestion(null);
+      // Обновляем список вопросов
+      await fetchTestQuestions();
+    } catch (error) {
+      console.error("Ошибка удаления вопроса:", error);
+    } finally {
+      setIsDeletingQuestion(false);
+    }
   };
 
   const getCategoryName = (categoryId: string) => {
@@ -267,7 +313,7 @@ const TestsPage: React.FC = () => {
         <TestForm
           onSuccess={() => {
             setIsCreateModalOpen(false);
-            fetchTests(); // React Query автоматически обновит данные, но можно вызвать для уверенности
+            fetchTests();
           }}
         />
       </Modal>
@@ -283,13 +329,13 @@ const TestsPage: React.FC = () => {
             initialTest={selectedTest}
             onSuccess={() => {
               setIsEditModalOpen(false);
-              fetchTests(); // React Query автоматически обновит данные, но можно вызвать для уверенности
+              fetchTests();
             }}
           />
         )}
       </Modal>
 
-      {/* Модальное окно для подтверждения удаления */}
+      {/* Модальное окно для подтверждения удаления теста */}
       <Modal
         isOpen={isDeleteModalOpen}
         onClose={() => setIsDeleteModalOpen(false)}
@@ -323,7 +369,7 @@ const TestsPage: React.FC = () => {
         isOpen={isQuestionsModalOpen}
         onClose={() => setIsQuestionsModalOpen(false)}
         title={`Вопросы теста "${selectedTest?.name}"`}
-        size="lg"
+        size="xl"
       >
         <div className="p-6">
           {questions.length === 0 ? (
@@ -333,36 +379,73 @@ const TestsPage: React.FC = () => {
               </p>
             </div>
           ) : (
-            <div className="mb-6">
+            <div className="mb-6 space-y-6">
               {questions.map((question, index) => (
-                <div key={question.$id} className="mb-6 p-4 border rounded-lg">
-                  <div className="flex justify-between items-start">
-                    <h3 className="text-lg font-bold mb-2">
+                <div
+                  key={question.$id}
+                  className="border rounded-lg p-4 bg-gray-50"
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <h3 className="text-lg font-bold text-gray-900">
                       Вопрос {index + 1}
                     </h3>
+                    <div className="flex space-x-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => handleEditQuestion(question)}
+                      >
+                        Редактировать
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={() => handleDeleteQuestion(question)}
+                      >
+                        Удалить
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-gray-800 mb-4">{question.text}</p>
-                  <div className="ml-6">
+
+                  <p className="text-gray-800 mb-4 font-medium">
+                    {question.text}
+                  </p>
+
+                  <div className="space-y-2">
                     {question.options.map((option, optIndex) => (
                       <div
                         key={optIndex}
-                        className={`mb-2 p-2 rounded ${
+                        className={`p-3 rounded-md border ${
                           optIndex === question.correctOptionIndex
-                            ? "bg-green-100 border border-green-300"
-                            : ""
+                            ? "bg-green-100 border-green-300 text-green-800"
+                            : "bg-white border-gray-200"
                         }`}
                       >
-                        <span
-                          className={
-                            optIndex === question.correctOptionIndex
-                              ? "font-bold"
-                              : ""
-                          }
-                        >
-                          {optIndex + 1}. {option}
-                          {optIndex === question.correctOptionIndex &&
-                            " (Правильный ответ)"}
-                        </span>
+                        <div className="flex items-center">
+                          <span
+                            className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium mr-3 ${
+                              optIndex === question.correctOptionIndex
+                                ? "bg-green-500 text-white"
+                                : "bg-gray-300 text-gray-700"
+                            }`}
+                          >
+                            {optIndex + 1}
+                          </span>
+                          <span
+                            className={
+                              optIndex === question.correctOptionIndex
+                                ? "font-semibold"
+                                : ""
+                            }
+                          >
+                            {option}
+                          </span>
+                          {optIndex === question.correctOptionIndex && (
+                            <span className="ml-2 text-green-600 text-sm font-medium">
+                              ✓ Правильный ответ
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -371,7 +454,7 @@ const TestsPage: React.FC = () => {
             </div>
           )}
 
-          <div className="flex justify-end space-x-4">
+          <div className="flex justify-between">
             <Button variant="primary" onClick={handleAddQuestion}>
               Добавить вопрос
             </Button>
@@ -399,11 +482,73 @@ const TestsPage: React.FC = () => {
             testId={selectedTest.$id!}
             onSuccess={() => {
               setIsAddQuestionModalOpen(false);
-              fetchTestQuestions(); // Вызываем рефетч для получения обновленных вопросов
+              fetchTestQuestions();
               setIsQuestionsModalOpen(true);
             }}
           />
         )}
+      </Modal>
+
+      {/* Модальное окно для редактирования вопроса */}
+      <Modal
+        isOpen={isEditQuestionModalOpen}
+        onClose={() => {
+          setIsEditQuestionModalOpen(false);
+          setSelectedQuestion(null);
+          setIsQuestionsModalOpen(true);
+        }}
+        title="Редактирование вопроса"
+      >
+        {selectedQuestion && selectedTest && (
+          <QuestionForm
+            testId={selectedTest.$id!}
+            initialQuestion={selectedQuestion}
+            onSuccess={() => {
+              setIsEditQuestionModalOpen(false);
+              setSelectedQuestion(null);
+              fetchTestQuestions();
+              setIsQuestionsModalOpen(true);
+            }}
+          />
+        )}
+      </Modal>
+
+      {/* Модальное окно для подтверждения удаления вопроса */}
+      <Modal
+        isOpen={isDeleteQuestionModalOpen}
+        onClose={() => {
+          setIsDeleteQuestionModalOpen(false);
+          setSelectedQuestion(null);
+        }}
+        title="Подтверждение удаления"
+      >
+        <div className="p-6">
+          <p className="text-gray-700 mb-4">
+            Вы уверены, что хотите удалить этот вопрос? Это действие нельзя
+            будет отменить.
+          </p>
+          <div className="text-sm text-gray-600 mb-4 p-3 bg-gray-50 rounded">
+            <strong>Вопрос:</strong> {selectedQuestion?.text}
+          </div>
+          <div className="flex justify-end space-x-4">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setIsDeleteQuestionModalOpen(false);
+                setSelectedQuestion(null);
+              }}
+            >
+              Отмена
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmDeleteQuestion}
+              isLoading={isDeletingQuestion}
+            >
+              Удалить
+            </Button>
+          </div>
+        </div>
       </Modal>
     </Layout>
   );

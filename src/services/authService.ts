@@ -1,8 +1,9 @@
-// services/authService.ts
+// services/authService.ts (обновленная версия)
 import { appwriteConfig } from "@/constants/appwriteConfig";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Client, Account, ID, Databases, Query } from "appwrite";
 import { User, UserRole } from "@/lib/types";
+import { translateAuthError } from "@/utils/authErrorHandler";
 
 // Константы для Appwrite
 const {
@@ -126,9 +127,12 @@ export const authApi = {
         );
       }
       return user as unknown as User;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Ошибка при регистрации пользователя:", error);
-      throw error;
+
+      // Используем наш обработчик ошибок для перевода
+      const translatedError = translateAuthError(error);
+      throw new Error(translatedError);
     }
   },
   // Вход в систему
@@ -174,30 +178,11 @@ export const authApi = {
       console.log("Пользователь успешно авторизован:", userResult.name);
       return userResult as User;
     } catch (error: any) {
-      // Если это ошибка о создании дублирующей сессии, заменяем ее на сообщение об активации
-      if (
-        error.message &&
-        error.message.includes(
-          "Creation of a session is prohibited when a session is active"
-        )
-      ) {
-        console.error("Обнаружена активная сессия");
-
-        // Проверяем, не является ли текущий пользователь неактивированным
-        const currentUser = await authApi.getCurrentUser();
-        if (
-          currentUser &&
-          typeof currentUser === "object" &&
-          "notActivated" in currentUser
-        ) {
-          // Если неактивирован, меняем сообщение об ошибке
-          throw new Error(
-            "Ожидайте активации вашего аккаунта администратором."
-          );
-        }
-      }
       console.error("Ошибка при входе в систему:", error);
-      throw error;
+
+      // Используем наш обработчик ошибок для перевода
+      const translatedError = translateAuthError(error);
+      throw new Error(translatedError);
     }
   },
 
@@ -210,9 +195,12 @@ export const authApi = {
 
       console.log("Сессия успешно удалена");
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Ошибка при выходе из системы:", error);
-      throw error;
+
+      // Используем наш обработчик ошибок для перевода
+      const translatedError = translateAuthError(error);
+      throw new Error(translatedError);
     }
   },
 
@@ -230,9 +218,35 @@ export const authApi = {
 
       console.log("Пользователь успешно активирован");
       return user as unknown as User;
-    } catch (error) {
+    } catch (error: any) {
       console.error("Ошибка при активации пользователя:", error);
-      throw error;
+
+      // Используем наш обработчик ошибок для перевода
+      const translatedError = translateAuthError(error);
+      throw new Error(translatedError);
+    }
+  },
+
+  // Деактивация пользователя
+  deactivateUser: async (userId: string): Promise<User> => {
+    try {
+      console.log(`Деактивация пользователя с ID: ${userId}...`);
+
+      const user = await database.updateDocument(
+        DATABASE_ID,
+        collections.users,
+        userId,
+        { isActive: false }
+      );
+
+      console.log("Пользователь успешно деактивирован");
+      return user as unknown as User;
+    } catch (error: any) {
+      console.error("Ошибка при деактивации пользователя:", error);
+
+      // Используем наш обработчик ошибок для перевода
+      const translatedError = translateAuthError(error);
+      throw new Error(translatedError);
     }
   },
 };
@@ -243,6 +257,7 @@ export const authKeys = {
   user: () => [...authKeys.all, "user"] as const,
   users: () => [...authKeys.all, "users"] as const,
   pendingUsers: () => [...authKeys.all, "pending"] as const,
+  activeUsers: () => [...authKeys.all, "active"] as const,
 };
 
 // React Query хуки
@@ -306,6 +321,20 @@ export const useActivateUser = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: authKeys.users() });
       queryClient.invalidateQueries({ queryKey: authKeys.pendingUsers() });
+      queryClient.invalidateQueries({ queryKey: authKeys.activeUsers() });
+    },
+  });
+};
+
+export const useDeactivateUser = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (userId: string) => authApi.deactivateUser(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: authKeys.users() });
+      queryClient.invalidateQueries({ queryKey: authKeys.pendingUsers() });
+      queryClient.invalidateQueries({ queryKey: authKeys.activeUsers() });
     },
   });
 };
@@ -331,6 +360,27 @@ export const usePendingUsers = () => {
           "Ошибка при получении неактивированных пользователей:",
           error
         );
+        return [];
+      }
+    },
+  });
+};
+
+// Хук для получения списка активных пользователей
+export const useActiveUsers = () => {
+  return useQuery({
+    queryKey: authKeys.activeUsers(),
+    queryFn: async () => {
+      try {
+        const result = await database.listDocuments(
+          DATABASE_ID,
+          collections.users,
+          [Query.equal("isActive", true)]
+        );
+
+        return result.documents as unknown as User[];
+      } catch (error) {
+        console.error("Ошибка при получении активных пользователей:", error);
         return [];
       }
     },
